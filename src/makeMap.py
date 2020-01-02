@@ -55,6 +55,7 @@ class makeMap:
         rospy.loginfo("publishing updated map.")
 
         while not rospy.is_shutdown():
+            #self.updateOdom()
             pub_map.publish(self.current_map)
             rate.sleep()
     
@@ -111,7 +112,13 @@ class makeMap:
         -self.GRID_SIZEY/2*self.GRID_RESOLUTION, 0), Quaternion(0, 0, 0, 1))
 
         #print(self.current_map.info.origin.position.x, self.current_map.info.origin.position.y)
-        
+
+    def updateOdom(self):
+        # first, we'll publish the transform over tf
+        odom_broadcaster = tf.TransformBroadcaster()
+        odom_quat = tf.transformations.quaternion_from_euler(0, 0, self.yaw)
+        current_time = rospy.Time.now()
+        odom_broadcaster.sendTransform((self.curX, self.curY, 0.), odom_quat, current_time, "map", "odom")
 
 
 if __name__ == '__main__':
