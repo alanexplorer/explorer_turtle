@@ -15,6 +15,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn import linear_model, datasets
 from eigen import transform
+from bresenham import bresenham
 
 class makeMap:
 
@@ -155,32 +156,52 @@ class makeMap:
         line_y = lr.predict(line_X)
         line_y_ransac = ransac.predict(line_X)
 
-        #plt.scatter(X[inlier_mask], Y[inlier_mask], color='yellowgreen', marker='.', label='Inliers')
-        #plt.scatter(X[outlier_mask], Y[outlier_mask], color='gold', marker='.', label='Outliers')
-        #plt.plot(line_X, line_y, color='navy', linewidth=2, label='Linear regressor')
-        #plt.plot(line_X, line_y_ransac, color='cornflowerblue', linewidth=2, label='RANSAC regressor')
-        #plt.legend(loc='lower right')
-        #plt.xlabel("Input")
-        #plt.ylabel("Response")
-        #plt.show()
-        start = Point()
-        end = Point()
+        print(line_X)
 
-        start.x = line_X[0]
-        start.y = line_y_ransac[0]
-        end.x = line_X[len(line_X)-1]
-        end.y = line_y_ransac[len(line_y_ransac)-1]
+        if len(line_X) > 1 and len(line_y_ransac)>1:
 
-        pointStartWorld = Point()
-        pointEndtWorld = Point()
+            #plt.scatter(X[inlier_mask], Y[inlier_mask], color='yellowgreen', marker='.', label='Inliers')
+            #plt.scatter(X[outlier_mask], Y[outlier_mask], color='gold', marker='.', label='Outliers')
+            #plt.plot(line_X, line_y, color='navy', linewidth=2, label='Linear regressor')
+            #plt.plot(line_X, line_y_ransac, color='cornflowerblue', linewidth=2, label='RANSAC regressor')
+            #plt.legend(loc='lower right')
+            #plt.xlabel("Input")
+            #plt.ylabel("Response")
+            #plt.show()
+            start = Point()
+            end = Point()
 
-        pointStartWorld = self.laser2world(start.x, start.y)
-        pointEndtWorld = self.laser2world(end.x, end.y)
+            start.x = line_X[0]
+            start.y = line_y_ransac[0]
+            end.x = line_X[len(line_X)-1]
+            end.y = line_y_ransac[len(line_y_ransac)-1]
 
-        gridStartXY = self.point2grid(pointStartWorld.x, pointStartWorld.y)
-        gridEndXY = self.point2grid(pointEndtWorld.x, pointEndtWorld.y)
-        
+            pointStartWorld = Point()
+            pointEndtWorld = Point()
 
+            pointStartWorld = self.laser2world(start.x, start.y)
+            pointEndtWorld = self.laser2world(end.x, end.y)
+
+            gridStartXY = self.point2grid(pointStartWorld.x, pointStartWorld.y)
+            gridEndXY = self.point2grid(pointEndtWorld.x, pointEndtWorld.y)
+
+            self.updateCell(gridStartXY.x, gridStartXY.y, gridEndXY.x, gridEndXY.y)
+        else:
+            print("line not detected")
+
+    def updateCell(self, x0, y0, x1, y1):
+
+        start = self.gridXY2mapIndex(x0, y0)
+        end = self.gridXY2mapIndex(x1, y1)
+
+        if(start < 0 or start > self.GRID_SIZEX*self.GRID_SIZEY):
+            if(end < 0 or end > self.GRID_SIZEX*self.GRID_SIZEY):
+                print("out of map index")
+        else:
+            b = list(bresenham(x0, y0, x1, y1))
+            for i in b:
+                index = self.gridXY2mapIndex(i[0], i[1])
+                self.current_map.data[index] = 100
 
     def laser2world(self, x, y):
 
@@ -188,7 +209,7 @@ class makeMap:
         t.getRotationMatrix(self.yaw)
         t.getTranslationMatrix(self.curX, self.curY)
         p = Point()
-        p = t.pointTransform(x,y)
+        (p.x, p.y) = t.pointTransform(x,y)
         return p
 
     def point2grid(self, x, y):
@@ -204,6 +225,10 @@ class makeMap:
         p.y = gridY
 
         return p
+
+    def gridXY2mapIndex(self, x, y):
+
+        return y*self.GRID_SIZEX+x
 
 
 if __name__ == '__main__':

@@ -1,10 +1,9 @@
 import numpy as np
-from eigen import transform
+from bresenham import bresenham
 
-t = transform()
+l = list(bresenham(-1, -4, 3, 2))
 
-print(t.getRotationMatrix(0))
-print()
-print(t.getTranslationMatrix(0,-1))
-print()
-print(t.pointTransform(2,3))
+for i in l:
+    print(i[0])
+
+

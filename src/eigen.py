@@ -25,5 +25,5 @@ class transform():
     v = np.array([[x], [y], [0]])
     r = np.dot(self.R, self.T)
     v = np.dot(r, v)
-    return v
+    return (v[0], v[1])
 
