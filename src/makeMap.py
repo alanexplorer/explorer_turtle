@@ -8,6 +8,13 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
 from std_msgs.msg import Header
+from visualization_msgs.msg import Marker
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import pyplot as plt
+from sklearn import linear_model, datasets
+from eigen import transform
 
 class makeMap:
 
@@ -16,13 +23,16 @@ class makeMap:
     yaw = 0.0
     curX = 0.0
     curY = 0.0
-    curRanges = []
-    prevRanges = []
-    prior = []
+
+    prior = [] #array with probability prior
     laserInit = False
     angle_min = 0.0
     angle_increment = 0.0
     range_size = 0
+    n_samples = 0
+    pointsX = []
+    pointsY = []
+
 
     # parameter for mapping
     GRID_SIZEX = 500
@@ -55,7 +65,9 @@ class makeMap:
         rospy.loginfo("publishing updated map.")
 
         while not rospy.is_shutdown():
-            #self.updateOdom()
+            if self.n_samples:
+                self.updateMap()
+            self.updateOdom()
             pub_map.publish(self.current_map)
             rate.sleep()
     
@@ -73,18 +85,22 @@ class makeMap:
     def scan_callback(self, msg):
         if(self.laserInit == False):
             self.laserIntialed(msg)
-        
-        for i in range(self.range_size):
-            self.prevRanges[i] = self.curRanges[i]
-            self.curRanges[i] = msg.ranges[i] if msg.ranges[i] < self.LASER_MAX_RANG else float("NaN")
 
-            #print(self.curRanges[i])
+        arrx = []
+        arry = []
+      
+        for i in range(len(msg.ranges)):
+            if(not math.isnan(msg.ranges[i])):
+                x = msg.ranges[i] * math.cos(msg.angle_min + i*msg.angle_increment)
+                y = msg.ranges[i] * math.sin(msg.angle_min + i*msg.angle_increment)
+                arrx.append(x)
+                arry.append(y)
+               
+        self.pointsX = np.array(arrx) #Convert a list into an array
+        self.pointsY = np.array(arry) 
+        self.n_samples = len(arry)        
 
     def laserIntialed(self, msg):
-        for i in msg.ranges:
-            self.curRanges.append(i)
-            self.prevRanges.append(i)
-
         self.angle_min = msg.angle_min
         self.angle_increment = msg.angle_increment
         self.range_size = len(msg.ranges)
@@ -119,6 +135,75 @@ class makeMap:
         odom_quat = tf.transformations.quaternion_from_euler(0, 0, self.yaw)
         current_time = rospy.Time.now()
         odom_broadcaster.sendTransform((self.curX, self.curY, 0.), odom_quat, current_time, "map", "odom")
+
+    def updateMap(self):
+        X = self.pointsX.reshape(len(self.pointsX), 1)
+        Y = self.pointsX.reshape(len(self.pointsY), 1)
+
+        # Fit line using all data
+        lr = linear_model.LinearRegression()
+        lr.fit(X, Y)
+
+        # Robustly fit linear model with RANSAC algorithm
+        ransac = linear_model.RANSACRegressor()
+        ransac.fit(X, Y)
+        inlier_mask = ransac.inlier_mask_
+        outlier_mask = np.logical_not(inlier_mask)
+
+        # Predict data of estimated models
+        line_X = np.arange(X.min(), X.max())[:, np.newaxis]
+        line_y = lr.predict(line_X)
+        line_y_ransac = ransac.predict(line_X)
+
+        #plt.scatter(X[inlier_mask], Y[inlier_mask], color='yellowgreen', marker='.', label='Inliers')
+        #plt.scatter(X[outlier_mask], Y[outlier_mask], color='gold', marker='.', label='Outliers')
+        #plt.plot(line_X, line_y, color='navy', linewidth=2, label='Linear regressor')
+        #plt.plot(line_X, line_y_ransac, color='cornflowerblue', linewidth=2, label='RANSAC regressor')
+        #plt.legend(loc='lower right')
+        #plt.xlabel("Input")
+        #plt.ylabel("Response")
+        #plt.show()
+        start = Point()
+        end = Point()
+
+        start.x = line_X[0]
+        start.y = line_y_ransac[0]
+        end.x = line_X[len(line_X)-1]
+        end.y = line_y_ransac[len(line_y_ransac)-1]
+
+        pointStartWorld = Point()
+        pointEndtWorld = Point()
+
+        pointStartWorld = self.laser2world(start.x, start.y)
+        pointEndtWorld = self.laser2world(end.x, end.y)
+
+        gridStartXY = self.point2grid(pointStartWorld.x, pointStartWorld.y)
+        gridEndXY = self.point2grid(pointEndtWorld.x, pointEndtWorld.y)
+        
+
+
+    def laser2world(self, x, y):
+
+        t = transform()
+        t.getRotationMatrix(self.yaw)
+        t.getTranslationMatrix(self.curX, self.curY)
+        p = Point()
+        p = t.pointTransform(x,y)
+        return p
+
+    def point2grid(self, x, y):
+
+        originPosition = self.current_map.info.origin.position
+
+        gridX = int(round(x - originPosition.x)/self.GRID_RESOLUTION)
+        gridY = int(round(y - originPosition.y)/self.GRID_RESOLUTION)
+        assert gridX < self.GRID_SIZEX
+        assert gridY < self.GRID_SIZEY
+        p = Point()
+        p.x = gridX
+        p.y = gridY
+
+        return p
 
 
 if __name__ == '__main__':
