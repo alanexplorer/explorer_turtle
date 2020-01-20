@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+	<rosparam file="$(find explorer_turtle)/param/ros.yaml"/>
+	
+	<node name="makeMap" pkg="explorer_turtle" type="makeMap.py" output="screen"/>
+
+	<node name="RVIZ" pkg="rviz" type="rviz" args=" -d $(find explorer_turtle)/rviz/robot.rviz" />
+
+</launch>

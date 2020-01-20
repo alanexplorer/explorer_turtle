@@ -1,32 +1,17 @@
-# explorer_turtle
+# explorer_robot
 implementation of a package for exploration and mapping
 
-# Exploração Autonôma Turtlebot
+# Package required
 
-Implementação de um pacote para mapeamento e exploração autônoma de um ambiente.
+## Make sure the simulation package is installed:
 
+sudo apt-get install ros-<distro>-husky-simulator
 
-# Instações
+## Set an environmental variable HUSKY_GAZEBO_DESCRIPTION:
 
-Abaixo pacotes nescessários para executar este projeto
+export HUSKY_GAZEBO_DESCRIPTION=$(rospack find husky_gazebo)/urdf/description.gazebo.xacro
 
-## Turtlebot Simulator
+# Run
 
-```
-sudo apt-get install -y linux-headers-generic
-
-sudo apt-get update
-
-sudo apt-get install ros-kinetic-librealsense
-
-sudo apt-get install ros-kinetic-turtlebot
-
-sudo apt-get install ros-kinetic-turtlebot-apps
-
-sudo apt-get install ros-kinetic-turtlebot-interactions
-
-sudo apt-get install ros-kinetic-turtlebot-simulator
-
-## Switch to another file
-
-All your files and folders are presented as a tree in the file explorer. You can switch from one to another by clicking a file in the tree.
+$ roslaunch explorer_turtle robot_start.launch
+$ roslaunch explorer_turtle map.launch

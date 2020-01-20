@@ -1,0 +1,2 @@
+odometry_topic: odometry/filtered
+laser_topic: scan
