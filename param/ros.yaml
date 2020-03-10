@@ -1,2 +1,2 @@
-odometry_topic: odometry/filtered
+odometry_topic: odom
 laser_topic: scan

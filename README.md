@@ -13,5 +13,11 @@ export HUSKY_GAZEBO_DESCRIPTION=$(rospack find husky_gazebo)/urdf/description.ga
 
 # Run
 
-$ roslaunch explorer_turtle robot_start.launch
+## bring up the robot by command
+$ roslaunch explorer_turtle turtlebot_start.launch
+## We bring up 3D node, gmapping node, move base node
+$ roslaunch turtlebot_gazebo gmapping_demo.launch
+## run map create
 $ roslaunch explorer_turtle map.launch
+## teleop
+$ roslaunch turtlebot_teleop keyboard_teleop.launch
