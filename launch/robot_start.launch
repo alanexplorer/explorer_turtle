@@ -1,7 +1,0 @@
-<?xml version="1.0"?>
-<launch>	
-	<include file="$(find husky_gazebo)/launch/husky_empty_world.launch">
-		<arg name="world_name" value="$(find explorer_turtle)/worlds/maze.world"/>
-	</include>
-	<node name="teleop" pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" output="screen"/>
-</launch>

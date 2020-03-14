@@ -2,7 +2,7 @@
 
 import rospy
 import tf
-from math import sin, cos, pi,tan, atan2
+from math import sin, cos, pi,tan, atan2, log
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
 from sensor_msgs.msg import LaserScan
@@ -13,6 +13,7 @@ from visualization_msgs.msg import Marker
 import numpy as np
 from bresenham import *
 from transformations import point2grid, scan2world
+from visualization_msgs.msg import MarkerArray, Marker
 
 class makeMap:
 
@@ -21,7 +22,6 @@ class makeMap:
         self.laserInit = False
         self.odomInit = False
         self.angle_min = 0.0
-        self.range_max = 10
         self.angle_increment = 0.0
         self.range_size = 0
         self.curRanges = []
@@ -43,6 +43,10 @@ class makeMap:
         self.SENSOR_MODEL_FALSE_POSITIVE = 0.3
         self.OCCUPIED_PROB = 0.5
         self.prior = [] #array with probability prior
+        self.p_free=log(0.3/0.7)
+        self.p_occ=log(0.9/0.1)
+        self.max_logodd=100.0
+        self.max_logodd_belief=10.0
 
         # define ros param
         laser = rospy.get_param("/laser_topic")
@@ -73,9 +77,8 @@ class makeMap:
 
     def run(self):
         while not rospy.is_shutdown():
-            self.updateMap()
-            #self.handle_robot_pose("map", "odom", pose)
             self.updateOdom()
+            self.updateMap()
             self.rate.sleep()
 
     def updateMap(self):
@@ -83,15 +86,16 @@ class makeMap:
         for i in range(self.range_size):
             if not math.isnan(self.curRanges[i]):
                 if not math.isnan(self.prevRanges[i]) and abs(self.curRanges[i] - self.prevRanges[i]) > self.SCAN_DIFF_THRESHOLD:
-                    self.updateMapByOneScan(self.curRanges[i], i)
+                    r = self.curRanges[i]
+                    x = r * cos(self.angle_min + i*self.angle_increment)
+                    y = r * sin(self.angle_min + i*self.angle_increment)
+                    self.updateMapByOneScan(x,y)
 
         self.pub_map.publish(self.current_map)
 
-    def updateMapByOneScan(self, scanRange, scanIndex):
-        scanPoint = Point()
-        scanPoint.x = scanRange * math.cos(self.angle_min + scanIndex*self.angle_increment)
-        scanPoint.y = scanRange * math.sin(self.angle_min + scanIndex*self.angle_increment)
-        pointWorld = scan2world(scanPoint.x, scanPoint.y, self.yaw, self.curX, self.curY)
+    def updateMapByOneScan(self, x, y):
+
+        pointWorld = scan2world(x, y, self.yaw, self.curX, self.curY)
         originPosition = Point()
         originPosition = self.current_map.info.origin.position
         gridXY =  point2grid(pointWorld[0], pointWorld[1], originPosition.x, originPosition.y, self.GRID_SIZEX, self.GRID_SIZEY, self.GRID_RESOLUTION)   
@@ -133,7 +137,7 @@ class makeMap:
 
         for i in range(self.GRID_SIZEX*self.GRID_SIZEY):
             self.current_map.data.append(-1.0)
-            self.prior.append(0.5)
+            self.prior.append(0.0)
 
         # define messages to be published
         self.current_map.header.frame_id = "map"
@@ -176,12 +180,15 @@ class makeMap:
 
         if index < 0 or index > (self.GRID_SIZEX*self.GRID_SIZEY):
             print("out of map index")
-        if(len(self.prior)==(self.GRID_SIZEX*self.GRID_SIZEY)):
-            p_z = self.SENSOR_MODEL_TRUE_POSITIVE*self.prior[index] + self.SENSOR_MODEL_FALSE_POSITIVE*(1-self.prior[index])
 
-            self.prior[index] = (self.SENSOR_MODEL_TRUE_POSITIVE*self.prior[index])/p_z # p(m|z)
+        elif(len(self.prior)==(self.GRID_SIZEX*self.GRID_SIZEY)):
 
-            if self.prior[index] > 0.5:
+            self.prior[index] += self.p_occ
+
+            if self.prior[index] > self.max_logodd:
+                self.prior[index] = 100
+
+            if self.prior[index] >= self.max_logodd_belief:
                 self.current_map.data[index] = 100
             else:
                 self.current_map.data[index] = 0
@@ -190,12 +197,14 @@ class makeMap:
         if (index < 0 or index > self.GRID_SIZEX * self.GRID_SIZEY):
             print("out of map index")
         else:
-            if (self.prior[index] == 0.5 or self.prior[index] == 0.3):
-                self.prior[index] = 0.3
+            self.prior[index] +=self.p_free
+
+            if self.prior[index] < -self.max_logodd:
+                self.prior[index] = -100
+            if self.prior[index] >= self.max_logodd_belief:
+                self.current_map.data[index] = 100
             else:
-                self.prior[index] = 0.3
-            
-            self.current_map.data[index] = 100 if self.prior[index] > 0.5 else 0
+                self.current_map.data[index] = 0
 
     def gridXY2mapIndex(self, x, y):
 
