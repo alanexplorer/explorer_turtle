@@ -9,6 +9,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
 from std_msgs.msg import Header
+from explorer_turtle.msg import *
 from visualization_msgs.msg import Marker
 import numpy as np
 from bresenham import *
@@ -54,7 +55,8 @@ class makeMap:
 
         # define subscribers
         rospy.Subscriber(laser, LaserScan, self.scan_callback)
-        rospy.Subscriber(odom,Odometry, self.odom_callback)
+        #rospy.Subscriber(odom,Odometry, self.odom_callback)
+        rospy.Subscriber('state_estimate', Config, self.get_state_estimate)
 
         # define publishers
         self.pub_map = rospy.Publisher('/frontier_map',OccupancyGrid, queue_size=100)
@@ -131,6 +133,12 @@ class makeMap:
         self.angle_increment = msg.angle_increment
         self.range_size = len(msg.ranges)
         self.laserInit = True
+
+    def get_state_estimate(self, msg):
+
+        self.curX = msg.x
+        self.curY = msg.y
+        self.yaw = msg.th
 
     def initializeMap(self):
         # initialize int map grid array (100 = occupy, 0 = empty, -1 = unknown state)

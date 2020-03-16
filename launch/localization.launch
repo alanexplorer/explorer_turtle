@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<launch>
+	<rosparam file="$(find explorer_turtle)/param/ros.yaml"/>
+	
+	<node name="makeMap" pkg="explorer_turtle" type="ekf-localization.py" output="screen"/>
+
+</launch>
