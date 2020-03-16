@@ -22,7 +22,7 @@ $ roslaunch explorer_turtle map.launch
 ## teleop
 $ roslaunch turtlebot_teleop keyboard_teleop.launch
 
-#Code
+# Code
 
 ## Extended Kalman Filter
 
@@ -151,20 +151,5 @@ rospy.Subscriber('scan', LaserScan, kinect_scan_estimate)
 ```
 # Updated covariance estimate
 	predicted_covariance_est= (numpy.identity(3) - numpy.cross(kalman_gain,H))*predicted_covariance_est
-
-```
-
-## Reference Provider
-
-Every time the controller requests a pose, the reference_provider will respond. For now, the response of the reference_provider is a Config variable where the x and theta are the same as the current robot pose, and the y coordinate is incremented by 1 mm, so the robot moves in a straight line along the wall. 
-
-```
-# Only move in the y direction in 1 mm increments. 
-	x_desired = x_now
-	y_desired = y_now + 0.1
-	th_desired = th_now
-
-	# Package desired state in a custom message of type 'Config' 
-	desired_state = Config(x_desired, y_desired, th_
 
 ```
