@@ -55,8 +55,8 @@ class makeMap:
 
         # define subscribers
         rospy.Subscriber(laser, LaserScan, self.scan_callback)
-        #rospy.Subscriber(odom,Odometry, self.odom_callback)
-        rospy.Subscriber('state_estimate', Config, self.get_state_estimate)
+        rospy.Subscriber(odom,Odometry, self.odom_callback)
+        #rospy.Subscriber('state_estimate', Config, self.get_state_estimate)
 
         # define publishers
         self.pub_map = rospy.Publisher('/frontier_map',OccupancyGrid, queue_size=100)
@@ -64,7 +64,7 @@ class makeMap:
         self.initializeMap()       
 
         #publish rate
-        self.rate = rospy.Rate(50) # 500hz   
+        self.rate = rospy.Rate(50) # 50hz   
 
         #define transform
         self.listener = tf.TransformListener()

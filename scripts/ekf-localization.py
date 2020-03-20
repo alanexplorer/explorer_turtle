@@ -17,7 +17,6 @@ measurement =	0
 ave_meas_dist = 0
 
 pub = rospy.Publisher('state_estimate',Config, queue_size =10)
-
 def get_data():
 
     rospy.init_node('localization', anonymous=True)

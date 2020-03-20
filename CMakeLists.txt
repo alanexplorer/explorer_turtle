@@ -14,6 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   visualization_msgs
   message_generation
+  cv_bridge
+  image_transport
+
 )
 
 ## System dependencies are found with CMake's conventions
@@ -52,17 +55,14 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
  add_message_files(
    FILES
-   Config.msg
-   Control.msg
+   Marker.msg
+   MarkerArray.msg
  )
 
 ## Generate services in the 'srv' folder
- add_service_files(
-   FILES
-   RefState.srv
-   DesiredState.srv
-
- )
+ #add_service_files(
+ #  FILES
+ #)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -75,6 +75,7 @@ find_package(catkin REQUIRED COMPONENTS
  generate_messages(
    DEPENDENCIES
    std_msgs
+   geometry_msgs
  )
 
 ################################################
