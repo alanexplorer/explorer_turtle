@@ -1,164 +1,86 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
 
 import rospy
-import tf
-from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
-from aruco_msgs.msg import MarkerArray
 import numpy as np
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+from math import pi, sqrt, atan2, isnan
+from aruco_msgs.msg import MarkerArray
+from ass.particles import Particle
+import random
+from copy import deepcopy
 import matplotlib.pyplot as plt
-import time
-import copy
-from Class.particle import Particle
+from geometry_msgs.msg import Pose, Point, PoseWithCovarianceStamped
 
-
-#Ponto de partida (0,0) - Porta da sala
-#Marker de id 0 tem coordenadas (x_map0,y_map0) em metros
-
-x_map=[0.0]*4
-y_map=[0.0]*4
-
-x_map[0]=3.497980
-y_map[0]=-0.096514
-x_map[1]= -0.021379
-y_map[1]= 3.164220
-x_map[2]= -3.497550
-y_map[2]= 0.030892
-x_map[3]= -0.018278
-y_map[3]= -3.858117
-
-
-camara_distance_z = 0.12 # 15.5 cm  <-> 13 cm #dia 13/12/2018 <-> 12 cm => 12.5 cm   inicio a 81 cm
-camara_distance_x = 0.011 # 1.1 cm
-
-# Constants
-
-KEY_NUMBER = 2**(5*5) # number of total combinations possible in aruco code
-number_of_dimensions = 2
-Frequency = 9.5
+# Costante
 
 NUMBER_PARTICLES = 100
 NUMBER_MARKERS = 4
-translation_noise = 0.1
-rotation_noise = 0.1
-noise_factor = 1
-minimum_move = 0
-Sensor_noise = 0.1
-validity_threshold = 50
 
-def resample_particles(particles, updated_marker):
-
-	# Returns a new set of particles obtained by performing stochastic universal sampling, according to the particle weights.
-	# distance between pointers
-	step = 1.0/NUMBER_PARTICLES
-	# random start of first pointer
-	r = np.random.uniform(0,step)
-	# where we are along the weights
-	c = particles[0].get_weight()
-	# index of weight container and corresponding particle
-	i = 0
-	index = 0
-
-	new_particles = []
-
-	#loop over all particle weights
-	for _ in particles:
-		#go through the weights until you find the particle
-		u = r + index*step
-		while u > c:
-			i = i + 1
-			c = c + particles[i].get_weight()
-
-		#add that particle
-		if i == index:
-			new_particle = particles[i]
-			new_particle.set_weight(step)
-		else:
-			new_particle = particles[i].copy(updated_marker)
-		#new_particle = copy.deepcopy(particles[i])
-		#new_particle.set_weight(step)
-		new_particles.append(new_particle)
-		#increase the threshold
-
-		index += 1
-
-	del particles
-
-	return new_particles
+fig, ax = plt.subplots()
+robot_odom, = ax.plot([0], [0], color='black', marker='o', markersize=12)
+robot_estimate, = ax.plot([0], [0], color='red', marker='*', markersize=12)
+plt.ion()
+plt.xlim(-10, 20)
+plt.ylim(-20, 10)
+plt.xlabel('X', fontsize=10)  # X axis label
+plt.ylabel('Y', fontsize=10)  # Y axis label
+plt.title('FastSlam')
+#plt.legend()
+plt.grid(True)  # Enabling gridding
 
 
-class FastSlam():
+class FastSLAM:
 
 	def __init__(self):
 
-		self.read_move = np.array([0, 0, 0], dtype='float64').transpose()
-		self.first_read = True
-		self.particles = [Particle() for i in range(NUMBER_PARTICLES)]
-		self.updated_marker = [False]*NUMBER_MARKERS
+		# important variables
+		self.odom_data = np.array([0, 0, 0], dtype='float64').transpose()
+		self.state_trans_uncertainty_noise = np.eye(3, dtype=int)*1000
+		self.odom_init = False
+		self.marker_data = None
+		self.id = float("NaN")
+		self.x_path = np.array([0], dtype='float64')
+		self.y_path = np.array([0], dtype='float64')
 
-		self.could_it_read = False
-		self.z_distance_left_eye_to_robot_wheel = camara_distance_z
-		self.x_distance_left_eye_to_robot_wheel = camara_distance_x
-		self.markers_info = [None]*NUMBER_MARKERS
-		self.list_ids = np.ones(NUMBER_MARKERS, dtype='int32')*KEY_NUMBER
+		self.particles = [Particle(NUMBER_PARTICLES) for i in range(NUMBER_PARTICLES)]
+		self.aruco_list = [None]*NUMBER_MARKERS
 
-		rospy.init_node('FastSlam', anonymous=True)
+		rospy.Subscriber('odom', Odometry, self.odom_callback)
+		rospy.Subscriber('aruco_marker_publisher/markers', MarkerArray, self.marker_callback)
 
-		self.frequency = rospy.Rate(Frequency)
+		self.new_pose = Pose()
 
-		rospy.Subscriber("odom", Odometry, self.callback_odom)
+        # Init publishers
+		self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=10)
 
-		rospy.Subscriber('aruco_marker_publisher/markers', MarkerArray, self.callback_Markers)
-
-		self.posePublisher = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=1)
+		self.rate = rospy.Rate(100) # 100hz
 
 	def run(self):
 
 		while not rospy.is_shutdown():
-
-			motion_model = self.actual_movement()
-			landmarkers_ids = self.get_list_ids()
-			if landmarkers_ids[0] != KEY_NUMBER and np.linalg.norm(motion_model) > minimum_move:
+			if self.odom_init and not isnan(self.id) :
 				total_weight = 0
-				motion_model = self.get_movement()
+				for i in range(NUMBER_PARTICLES):
+					# set a position for each particles
+					self.particles[i].set_position(self.odom_data)
+					self.particles[i].predicted(self.state_trans_uncertainty_noise)
+					ave_meas_dist = self.landmarker_measured(self.marker_data)
+					self.particles[i].update(ave_meas_dist)
+					self.particles[i].update_weight()
+					total_weight += self.particles[i].get_weight()
 				
 				for i in range(NUMBER_PARTICLES):
-					expected_state = self.particles[i].particle_prediction(motion_model)
-					for marker_id in landmarkers_ids:
-						if marker_id == KEY_NUMBER:
-							break
-						self.updated_marker[marker_id] = True
-						landmarker_measurement = self.get_measerment(marker_id)
-						kalman_filter = self.particles[i].get_kalman_filters(marker_id, landmarker_measurement)
-						
-						kalman_filter.Apply_EKF(expected_state, landmarker_measurement)
-						validity_info = kalman_filter.measurement_validition()
-						self.particles[i].update_weight(marker_id)
-
-						if np.linalg.norm(validity_info) < validity_threshold:
-							kalman_filter.Update()
-
-					total_weight += self.particles[i].get_weight()
-
-				sum_weights = 0
-				for i in range(NUMBER_PARTICLES):
 					self.particles[i].normalize_weight(total_weight)
-					sum_weights += self.particles[i].get_weight()**2
 
-				self.publisher_pose(self.particles)
+				self.particles = self.resample_particles(self.particles)
+				#self.drawing_plot(self.particles)
+				self.pub_est(self.particles)
 
-				neff = 1.0/sum_weights
+			self.id = float("NaN")
+			self.rate.sleep()
 
-				if neff < float(NUMBER_PARTICLES)/2:
-					self.particles = resample_particles(self.particles, self.updated_marker)
-					del self.updated_marker
-					self.updated_marker = [False]*NUMBER_MARKERS
-
-			self.reset_list_ids()
-
-			self.frequency.sleep()
-
-	def publisher_pose(self, particles):
+	def pub_est(self, particles):
 
 		Max = 0
 		Max_id = 0
@@ -168,112 +90,117 @@ class FastSlam():
 				Max = particles[i].get_weight()
 				Max_id = i
 
-		estimate = particles[Max_id].get_position()
-
-		pose = Pose()
-
-        # Fill position values
-		pose.position.x = estimate[0]
-		pose.position.y = estimate[1]
-		pose.position.z = 0
-
-        # Convert rpy to quaternion
-		quaternion = tf.transformations.quaternion_from_euler(0, 0, estimate[2])
-
-        # Add quaternion to message
-		pose.orientation.x = quaternion[0]
-		pose.orientation.y = quaternion[1]
-		pose.orientation.z = quaternion[2]
-		pose.orientation.w = quaternion[3]
-
-		self.posePublisher.publish(pose)
-
-				
-	def callback_odom(self, data):
-
-		# robo_frame
-		#frame_id = data.header.frame_id # odom
-		#child_frame_id = data.child_frame_id # base_link
-
-		# pose
-		x = data.pose.pose.position.x # front-back
-		y = data.pose.pose.position.y # right-left
-				
-		orientation_x = data.pose.pose.orientation.x
-		orientation_y = data.pose.pose.orientation.y
-		orientation_z = data.pose.pose.orientation.z
-		orientation_w = data.pose.pose.orientation.w
-		_, _, yaw = tf.transformations.euler_from_quaternion((orientation_x, orientation_y, orientation_z, orientation_w))
-
-		if self.first_read == True:
-			self.last_position = np.array([x, y, yaw], dtype='float64').transpose()
-			self.total_movement = np.array([0, 0, 0], dtype='float64').transpose()
-			self.first_read = False
-
-		self.odom_position = np.array([x, y, yaw], dtype='float64').transpose()
-		self.movement = np.subtract(self.odom_position, self.last_position)
-		self.total_movement = np.add(self.total_movement, np.absolute(self.movement))
-
-		if self.movement[2] > np.pi:
-			self.movement[2] = 2*np.pi - self.movement[2]
-		if self.movement[2] < -np.pi:
-			self.movement[2] = - 2*np.pi - self.movement[2]
-		self.last_position = self.odom_position
-		self.read_move = np.add(self.read_move, self.movement)
-
-	def actual_movement(self): 
-		return self.read_move
-
-	def get_movement(self):
-		msg = self.read_move
-		self.read_move = np.array([0, 0, 0], dtype='float64').transpose()
-		return msg
-
-	def get_total_movement(self):
-		return self.total_movement
-
-
-	def callback_Markers(self, data):
+		estimative = particles[Max_id].get_position()
 		
-		# static tf could be applied here: z = z + z_distance_left_eye_to_robot_wheel, x = x + x_distance_left_eye_to_robot_wheel
-		for i in range(NUMBER_MARKERS):
-			try:
-				marker_info = data.markers.pop()
-			except:
-				break
+        # pack up estimate to ROS msg and publish
+
+		self.new_pose.position.x = estimative[0]
+		self.new_pose.position.y = estimative[1]
+		self.new_pose.position.z = 0
+
+		quat = quaternion_from_euler(0, 0, estimative[2])
+
+		self.new_pose.orientation.x = quat[0]
+		self.new_pose.orientation.y = quat[1]
+		self.new_pose.orientation.z = quat[2]
+		self.new_pose.orientation.w = quat[3]
+
+		self.estimate_pub.publish(self.new_pose)
+
+	def landmarker_measured(self, marker):
+
+		#Equation 3.35  - FastSLAM: A factored solution to the simultaneous localization and mapping problem
+
+		th_y = marker.pose.pose.position.y # right-left 
+		th_x = marker.pose.pose.position.z # front-back 
+
+		# position of the marker relative to camera_link
+
+		distance = sqrt(th_x**2 + th_y**2)
+
+		return distance
+
+	def odom_callback(self, msg):
+
+		# get x, y and yaw
+		q = msg.pose.pose.orientation
+		orientation_list = [q.x, q.y, q.z, q.w]
+		# the yaw is defined between -pi to pi
+		(_, _, yaw) = euler_from_quaternion(orientation_list)
+		x = msg.pose.pose.position.x
+		y = msg.pose.pose.position.y
+
+		self.odom_data = np.array([x, y, yaw], dtype='float64').transpose()
+
+		# UNCERTAINTY INTRODUCED BY STATE TRANSITION (MEAN = 0, COVARIANCE PUBLISHED BY ODOM TOPIC: )
+		# Odom covariance matrix is 6 x 6. We need a 3 x 3 covariance matrix of x, y and theta. Omit z, roll and pitch data. 
+		self.state_trans_uncertainty_noise = np.array([[msg.pose.covariance[0],msg.pose.covariance[1],msg.pose.covariance[5]],
+		[msg.pose.covariance[6],msg.pose.covariance[7],msg.pose.covariance[11]], [msg.pose.covariance[30],msg.pose.covariance[31],msg.pose.covariance[35]]])
+
+		self.x_path = np.insert(self.x_path, 0, x)
+		self.y_path = np.insert(self.y_path, 0, y)
+
+		self.odom_init = True
+	
+	def marker_callback(self, msg):
+		try:
+			self.marker_data = msg.markers.pop()
+			self.id = self.marker_data.id
+
+		except rospy.ROSInterruptException:
+			pass
+
+	def resample_particles(self, particles):
+		new_particles = []
+		weight = [p.get_weight() for p in particles]
+		index = int(random.random() * NUMBER_PARTICLES)
+		beta = 0.0
+		mw = max(weight)
+		for i in range(NUMBER_PARTICLES):
+			beta += random.random() * 2.0 * mw
+			while beta > weight[index]:
+				beta -= weight[index]
+				index = (index + 1) % NUMBER_PARTICLES
+			new_particle = deepcopy(particles[index])
+			new_particle.weight = 1
+			new_particles.append(new_particle)
+		return new_particles
+
+	def drawing_plot(self, particles):
+
+		Max = 0
+		Max_id = 0
+
+		for i in range(NUMBER_PARTICLES):
+			if particles[i].get_weight() > Max:
+				Max = particles[i].get_weight()
+				Max_id = i
 		
-			self.list_ids[i] = marker_info.id
-			self.markers_info[marker_info.id] = marker_info
+		plt.show(block=False)
 
+		robot_odom.set_xdata(self.odom_data[0])
+		robot_odom.set_ydata(self.odom_data[1])
+		ax.draw_artist(ax.patch)
+		ax.draw_artist(robot_odom)
 
-	def get_measerment(self, index):
+		estimative = particles[Max_id].get_position()
 
-		x = self.markers_info[index].pose.pose.position.x # right-left
-		z = self.markers_info[index].pose.pose.position.z # front-back
+		robot_estimate.set_xdata(estimative[0])
+		robot_estimate.set_ydata(estimative[1])
+		ax.draw_artist(ax.patch)
+		ax.draw_artist(robot_estimate)
 
-		# position of the marker relative to base_link
-		z = z + self.z_distance_left_eye_to_robot_wheel
-		x = x + self.x_distance_left_eye_to_robot_wheel
+		fig.canvas.flush_events()
 
-		marker_distance = np.sqrt(z**2+x**2)
-		marker_direction = np.arctan(x/z)
+	def get_path(self):
+		return self.x_path, self.y_path
 
-		return np.array([marker_distance, -marker_direction], dtype='float64').transpose()
-
-
-	def get_list_ids(self):
-		return self.list_ids
-
-	def reset_list_ids(self):
-		i = 0
-		while self.list_ids[i] != KEY_NUMBER:
-			self.list_ids[i] = KEY_NUMBER
-			i += 1
-
-	def marker_info(self, index):
-		return self.markers_info[index]
 
 if __name__ == '__main__':
-
-	f = FastSlam()
-	f.run()
+    try:
+        rospy.init_node("FastSLAM")
+        f = FastSLAM()
+        f.run()
+        
+    except rospy.ROSInterruptException:
+        pass
