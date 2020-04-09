@@ -12,8 +12,8 @@ from std_msgs.msg import Header
 from explorer_turtle.msg import *
 from visualization_msgs.msg import Marker
 import numpy as np
-from bresenham import *
-from transformations import point2grid, scan2world
+from ass.bresenham import *
+from ass.transformations import point2grid, scan2world
 from visualization_msgs.msg import MarkerArray, Marker
 
 class makeMap:
