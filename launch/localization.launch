@@ -11,6 +11,6 @@
         <param name="io_method" value="mmap"/>
     </node>
 
-    <node name="localization" pkg="explorer_turtle" type="ekf-localization.py" output="screen"/>
+    <node name="aruco" pkg="explorer_turtle" type="aruco.py" output="screen"/>
 
 </launch>

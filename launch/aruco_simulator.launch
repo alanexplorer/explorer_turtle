@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <launch>
 
     <arg name="markerSize"      default="0.1"/>    <!-- in m -->
