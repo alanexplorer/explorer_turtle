@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 
+__author__ = "Alan Pereira da Silva"
+__copyright__ = "Copyright (C), Daedalus Roboti"
+__license__ = "GPL"
+__version__ = "1.0"
+__email__ = "aps@ic.ufal.br"
+
 import rospy
 import tf
 from math import sin, cos, pi,tan, atan2, log

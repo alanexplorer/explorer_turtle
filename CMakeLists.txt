@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   std_msgs
   visualization_msgs
+  geometry_msgs
   message_generation
   cv_bridge
   image_transport
@@ -53,11 +54,11 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
- #add_message_files(
- #  FILES
- #  Marker.msg
- #  MarkerArray.msg
- #)
+ add_message_files(
+   FILES
+   Marker.msg
+   MarkerArray.msg
+ )
 
 ## Generate services in the 'srv' folder
  #add_service_files(
@@ -110,7 +111,10 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES explorer_turtle
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+  CATKIN_DEPENDS
+    message_runtime
+    geometry_msgs
+    std_msgs #roscpp rospy std_msgs
 #  DEPENDS system_lib
 )
 

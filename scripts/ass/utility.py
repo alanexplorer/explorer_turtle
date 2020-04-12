@@ -13,3 +13,10 @@ def angdiff(th1, th2):
 def calcDistance(P1, P2):
     x = math.sqrt((P1[0] - P2[0])**2 + (P1[1] - P2[1])**2)
     return x
+
+def normangle(th):
+    if th > np.pi:
+        th = 2*np.pi - th
+    if th < -np.pi:
+        th = - 2*np.pi - th
+    return th

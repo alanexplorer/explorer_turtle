@@ -10,31 +10,22 @@ import rospy
 from nav_msgs.msg import Odometry
 import numpy as np
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
-from math import pi, sqrt, atan2, isnan, sin, cos
-from aruco_msgs.msg import MarkerArray
+from math import pi, sqrt, atan2, isnan, sin, cos, acos
+from explorer_turtle.msg import MarkerArray, Marker
 import matplotlib.pyplot as plt
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseWithCovarianceStamped
 from ass.utility import *
+import yaml
 
 # CONSTANT
 
 NUMBER_MARKERS = 8
 KEY_NUMBER = 1024
 Ts = 1/100 # control (u) by a translational and angular velocity, executed over a fixed time interval Ts
-NOISE = 0.1 # noise ref landmark
 
-# ArUco Position
-ARUCO = {
-0:[1.287651, 0.072859, 0.278322],
-1:[-0.010006, 2.743860, 0.206265],
-2:[0.237944, -2.534720, 0.247689],
-3:[-3.616780, -0.708729, 0.251791],
-4:[-5.850702, 1.350077, 0.265390],
-5:[-4.166750, -1.428700, 0.291247],
-6:[-4.854020, -6.216260, 0.300666],
-7:[3.637920, -1.999640, 0.296951],
-}
-
+sigma_range = 5.8e-15
+sigma_bearing = 0.5
+sigma_id = 1e16
 
 fig, ax = plt.subplots()
 x_l = [0]*NUMBER_MARKERS
@@ -61,18 +52,26 @@ class EkfLocalization:
 
     def __init__(self):
 
+        rospy.loginfo("locating...")
+
+        with open("/home/alanpereira/catkin_ws/src/explorer_turtle/param/map.yaml", 'r') as stream:
+            try:
+                self.ARUCO = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+
         # important variables
         self.control = np.array([0, 0], dtype='float64').transpose()
         self.motion_model = np.array([0, 0, 0], dtype='float64').transpose()
         self.last_odom = np.array([0, 0, 0], dtype='float64').transpose()
         self.odom_init = False
-        self.markers_info = [None]*NUMBER_MARKERS
-        self.list_ids = np.ones(NUMBER_MARKERS, dtype='int32')*KEY_NUMBER
+        self.markers_info = None
+        self.markerStatus = False
 
-        self.P = 0
-        self.R = np.eye(3, dtype=int)*1000
-        self.Q = np.identity(3, dtype='float64')*NOISE
+        # Choose very small process covariance because we are using the ground truth data for initial location
+        self.sigma = np.diagflat([1e-10, 1e-10, 1e-10])
         self.H = 0
+        self.Q = np.diagflat(np.array([sigma_range, sigma_bearing, sigma_id])) ** 2
 
         self.x_path_odom = np.array([0], dtype='float64')
         self.y_path_odom = np.array([0], dtype='float64')
@@ -82,7 +81,8 @@ class EkfLocalization:
 
         # Init Subscriber
         rospy.Subscriber('odom', Odometry, self.odom_callback)
-        rospy.Subscriber('aruco_marker_publisher/markers', MarkerArray, self.marker_callback)
+        #rospy.Subscriber('/explorer/markers', MarkerArray, self.marker_callback)
+        rospy.Subscriber('/explorer/marker', Marker, self.marker_callback)
 
         # Init Publishers
         self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=50)
@@ -91,24 +91,34 @@ class EkfLocalization:
 
     def run(self):
         while not rospy.is_shutdown():
-            if self.odom_init:
-                self.prediction()
+            if self.odom_init and self.markerStatus:
+                pos = self.last_odom
+                control = self.control
+                measurements = self.markers_info
+                i = measurements[2]
+                self.prediction(pos, control)
                 self.update()
-                robot = self.last_odom
-                landmarkers_ids = self.list_ids
-                for marker_id in landmarkers_ids:
-                    if marker_id == KEY_NUMBER:
-                        break
-                    Z_ = self.landmarker_measured(self.markers_info[marker_id], robot)
-                    Z  = self.aruco_measured(ARUCO[marker_id], marker_id, robot)
-                    residual = np.subtract(Z, Z_)
-                    S = self.H*self.P*np.transpose(self.H) + self.Q
-                    K = self.P*np.transpose(self.H)*np.linalg.inv(S)
-                    mu = robot + np.dot(K, residual)
-                    sigma = (np.identity(3) - np.cross(K, self.H))*self.P
-                    self.pub_position(mu, sigma)
+
+                Z  = measurements
+                ZHAT = self.aruco_true(self.ARUCO[i], i, pos)
+                print("measurements", Z)
+                print("expected", ZHAT)
+                residual = np.subtract(Z, ZHAT)
+                
+                S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
+                K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
+                mu = pos + np.dot(K, residual)
+                self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
+
+                self.pub_position(mu, self.sigma)
+                self.resetMarkers()
 
             self.rate.sleep()
+
+    def resetMarkers(self):
+
+        self.markers_info = None
+        self.markerStatus = False
 
     def pub_position(self, mu, sigma):
 
@@ -129,24 +139,28 @@ class EkfLocalization:
         self.estimate_pub.publish(estimate)
 
 
-    def prediction(self):
+    def prediction(self, pos, control):
 
         # compute the Jacobians needed for the linearized motion model.
-        th = self.last_odom[2] # or th = self.motion_model[1] ?
-        v = self.control[0]
-        w = self.control[1]
-        G_02 = -(v/w)*cos(th) + (v/w)*cos(th + w*Ts)
-        G_12 = -(v/w)*sin(th) + (v/w)*sin(th + w*Ts)
+        th = pos[2]
+        v = control[0]
+        w = control[1]
 
-        self.Jr = np.identity(3, dtype='float64')
-        self.Jr[0][2] = G_02
-        self.Jr[1][2] = G_12
+        #G_02 = -(v/w)*cos(th) + (v/w)*cos(th + w*Ts)
+        #G_12 = -(v/w)*sin(th) + (v/w)*sin(th + w*Ts)
+
+        G_02 = -v*Ts*sin(th + (w*Ts)/2)
+        G_12 = v*Ts*cos(th + (w*Ts)/2)
+
+        self.G = np.identity(3, dtype='float64')
+        self.G[0][2] = G_02
+        self.G[1][2] = G_12
 
     def update(self):
 
-        # # Calculated the total uncertainty of the predicted state estimate
-        self.P = self.Jr*self.P*np.transpose(self.Jr) + self.R
+        #Calculated the total uncertainty of the predicted state estimate
 
+        self.sigma = self.G.dot(self.sigma).dot(self.G.T) + self.R
 
     def odom_callback(self, msg):
 
@@ -187,69 +201,34 @@ class EkfLocalization:
         self.odom_init = True
 	
     def marker_callback(self, msg):
-        
-        for i in range(NUMBER_MARKERS):
-            try:
-                marker_info = msg.markers.pop()
-            except:
-                break
-		
-            self.list_ids[i] = marker_info.id
-            self.markers_info[marker_info.id] = marker_info
 
-    def aruco_measured(self, aruco, index, robot):
+        try:
+            index = msg.id
+            dist = msg.distance
+            th = msg.angle
+            self.markers_info = np.array([dist, th , index]).transpose()
+            self.markerStatus = True
+        except:
+            pass
 
-        lx = aruco[0]
-        ly = aruco[1]
 
-        rx = robot[0]
-        ry = robot[1]
-        rt = robot[2]
+    def aruco_true(self, aruco, index, robot):
 
-        q = (lx - rx)**2 + (ly - ry)**2
-        dist = sqrt(q)
-        direc = atan2((ly - ry), (lx - rx)) - rt
-
-        Z = np.array([dist, direc, index], dtype='float64').transpose()
-
-        return Z
-
-    def landmarker_measured(self, marker, robot):
-
-        #Equation 3.36  - FastSLAM: A factored solution to the simultaneous localization and mapping problem
-        # ry = lx, rx = lz, rz = lx
-        # gazebo: blue = z, red = x, green = y
-        '''
-
-        ly = marker.pose.pose.position.x # right-left 
-        lx = marker.pose.pose.position.z # front-back 
-
-        # position of the marker relative to camera_link
+        lx = float(aruco[0])
+        ly = float(aruco[1])
 
         rx = robot[0]
         ry = robot[1]
-        rt = robot[2]
-        
+        rt = robot[0]
 
         q = (lx - rx)**2 + (ly - ry)**2
         dist = sqrt(q)
-        direc = atan2((ly - ry), (lx - rx)) - rt
+        th = atan2((ly-ry),(lx-rx) ) - rt
+        th = normangle(th)
 
         self.H = np.array([[-(lx - rx)/dist, -(ly - ry)/dist , 0],[(ly - ry)/q, -(lx - rx)/q, -1],[0 , 0, 0]])
-        '''
 
-        lz = marker.pose.pose.position.z # right-left 
-        lx = marker.pose.pose.position.x # front-back   
-
-        rt = robot[2]
-
-        q = (lz)**2 + (lx)**2   
-        dist = sqrt(q)   
-        direc = atan2((lx), (lz)) - rt
-
-        self.H = np.array([[-(lz)/dist, -(lx)/dist , 0],[(lx)/q, -(lz)/q, -1],[0 , 0, 0]])
-
-        Z = np.array([dist, direc, marker.id], dtype='float64').transpose()
+        Z = np.array([dist, th, index]).transpose()
 
         return Z
 
@@ -268,9 +247,9 @@ class EkfLocalization:
         ax.draw_artist(robot_estimate)
 
         cnt = 0
-        for i in ARUCO:
-            x_l[cnt] = ARUCO[i][0]
-            y_l[cnt] = ARUCO[i][1]
+        for i in self.ARUCO:
+            x_l[cnt] = self.ARUCO[i][0]
+            y_l[cnt] = self.ARUCO[i][1]
             plt.text(x_l[cnt]-0.2, y_l[cnt]-0.3, types[cnt], fontsize=9)
             cnt += 1
 

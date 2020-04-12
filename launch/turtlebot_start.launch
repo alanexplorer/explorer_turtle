@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
   <include file="$(find turtlebot_gazebo)/launch/turtlebot_world.launch">
-	<arg name="world_file" value="$(find explorer_turtle)/worlds/house.world"/>
+	<arg name="world_file" value="$(find explorer_turtle)/worlds/square.world"/>
   </include>
 </launch>

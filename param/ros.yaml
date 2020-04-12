@@ -1,2 +1,4 @@
 odometry_topic: odom
 laser_topic: scan
+camera_image: camera/rgb/image_raw
+camera_info: camera/rgb/camera_info
