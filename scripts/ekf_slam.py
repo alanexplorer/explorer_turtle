@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseWithCovarianceStamped
 from ass.utility import *
 import yaml
+from marker_rviz import MarkerRviz
+import tf
 
 # CONSTANT
 
@@ -45,6 +47,7 @@ class EkfLocalization:
         self.odom_init = False
         self.measurement = None
         self.markerStatus = False
+        self.markerList = [False]*NUMBER_MARKERS
 
         # Choose very small process covariance because we are using the ground truth data for initial location
         self.sigma = np.diagflat([1e-10, 1e-10, 1e-10])
@@ -58,6 +61,12 @@ class EkfLocalization:
 
         # Init Publishers
         self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=50)
+
+        # list with rooms parameters 
+
+        self.room_0 = MarkerRviz("sl0", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0))
+        self.room_1 = MarkerRviz("sl1", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0)) 
+        self.room_2 = MarkerRviz("sl2", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0)) 
 
         self.rate = rospy.Rate(100) # 100hz
 
@@ -80,6 +89,24 @@ class EkfLocalization:
                 self.resetMarkers()
 
             self.rate.sleep()
+
+    def markerVisualization(self):
+
+        if self.markerList[6] == True:
+            self.room_0.publish()
+        if self.markerList[8] == True:
+            self.room_1.publish()
+        if self.markerList[2] == True:
+            self.room_2.publish()
+
+        br_room_0 = tf.TransformBroadcaster()
+        br_room_0.sendTransform((0.0, 0.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl0", "map")
+
+        br_room_1 = tf.TransformBroadcaster()
+        br_room_1.sendTransform((1.0, 0.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl1", "map")
+
+        br_room_2 = tf.TransformBroadcaster()
+        br_room_2.sendTransform((1.0, -2.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl2", "map")
 
     def resetMarkers(self):
 
