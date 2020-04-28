@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
 	
-    <node name="localization" pkg="explorer_turtle" type="ekf_localization.py" output="screen"/>
+    <node name="localization" pkg="explorer_turtle" type="ekf_slam.py" output="screen"/>
 
 </launch>
