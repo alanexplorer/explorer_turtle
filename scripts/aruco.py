@@ -14,7 +14,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from explorer_turtle.msg import Marker, MarkerArray #pylint:disable=import-error
 import numpy as np
 from math import sin, cos, sqrt, atan2, pi
-from ass.utility import *
+#from ass.utility import *
 
 # Launch file needs to launch usb_cam_node: rosrun usb_cam usb_cam_node
 # To get around the error, first roslaunch usb_cam usb_cam-test.launch

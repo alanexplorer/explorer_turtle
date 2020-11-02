@@ -13,7 +13,7 @@ class MarkerRviz():
 		self.marker = Marker()
 		self.marker.header.frame_id = name
 		self.marker.header.stamp = rospy.get_rostime()
-		self.marker.ns = 'door_'+ name
+		self.marker.ns = 'totem_'+ name
 		self.marker.id = id
 		self.marker.action =  Marker.ADD
 		self.marker.pose.position.x = position[0]
@@ -32,7 +32,7 @@ class MarkerRviz():
 		self.marker.color.b = color[2]
 		self.marker.color.a = 1.0
 
-		self.marker.type = Marker.CUBE
+		self.marker.type = Marker.CYLINDER
 
 		self.pub_send_marker = rospy.Publisher('/explorer/totens_'+name, Marker, queue_size=10)
 

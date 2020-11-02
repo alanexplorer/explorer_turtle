@@ -1,8 +1,5 @@
 <?xml version="1.0"?>
 <launch>
-
     <rosparam file="$(find explorer_turtle)/param/ros.yaml"/>
-
     <node name="aruco" pkg="explorer_turtle" type="aruco.py" output="screen"/>
-
 </launch>

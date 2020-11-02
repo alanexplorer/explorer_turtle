@@ -37,9 +37,11 @@ class EkfLocalization:
 
         with open("/home/alanpereira/catkin_ws/src/explorer_turtle/param/map.yaml", 'r') as stream:
             try:
-                self.ARUCO = yaml.safe_load(stream)
+                self.aruco_yaml = yaml.safe_load(stream)
             except yaml.YAMLError as exc:
                 print(exc)
+            
+            stream.close()
 
         # important variables
         self.control = np.array([0, 0], dtype='float64').transpose()
@@ -64,9 +66,14 @@ class EkfLocalization:
 
         # list with rooms parameters 
 
-        self.room_0 = MarkerRviz("sl0", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0))
-        self.room_1 = MarkerRviz("sl1", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0)) 
-        self.room_2 = MarkerRviz("sl2", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.5, 0.05, 1.0), (0.0, 1.0, 0.0)) 
+        self.totem_0 = MarkerRviz("t0", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0))
+        self.totem_1 = MarkerRviz("t1", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0)) 
+        self.totem_2 = MarkerRviz("t2", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0)) 
+        self.totem_3 = MarkerRviz("t3", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0))
+        self.totem_4 = MarkerRviz("t4", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0)) 
+        self.totem_5 = MarkerRviz("t5", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0)) 
+        self.totem_6 = MarkerRviz("t6", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0))
+        self.totem_7 = MarkerRviz("t7", 0, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.1, 0.1, 1.0), (0.0, 1.0, 0.0)) 
 
         self.rate = rospy.Rate(100) # 100hz
 
@@ -79,34 +86,64 @@ class EkfLocalization:
                 i = Z[2] # Feature
                 self.prediction(pos, control)
                 self.sigma = self.G.dot(self.sigma).dot(self.G.T) + self.R
-                ZHAT = self.aruco_true(self.ARUCO[i], i, pos)
+                print(pos)
+                ZHAT = self.aruco_true(self.aruco_yaml[i], i, pos)
                 residual = np.subtract(Z, ZHAT)
                 S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
-                K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
+                if np.linalg.det(S):
+                    K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
+                else:
+                    K = np.array([0, 0, 0], dtype='float64')
                 mu = pos + np.dot(K, residual)
                 self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
                 self.pub_position(mu, self.sigma)
+                self.markerVisualization()
                 self.resetMarkers()
 
             self.rate.sleep()
 
     def markerVisualization(self):
 
-        if self.markerList[6] == True:
-            self.room_0.publish()
-        if self.markerList[8] == True:
-            self.room_1.publish()
+        if self.markerList[0] == True:
+            self.totem_0.publish()
+        if self.markerList[1] == True:
+            self.totem_1.publish()
         if self.markerList[2] == True:
-            self.room_2.publish()
+            self.totem_2.publish()
+        if self.markerList[3] == True:
+            self.totem_3.publish()
+        if self.markerList[4] == True:
+            self.totem_4.publish()
+        if self.markerList[5] == True:
+            self.totem_5.publish()
+        if self.markerList[6] == True:
+            self.totem_6.publish()
+        if self.markerList[7] == True:
+            self.totem_7.publish()
 
         br_room_0 = tf.TransformBroadcaster()
-        br_room_0.sendTransform((0.0, 0.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl0", "map")
+        br_room_0.sendTransform(self.aruco_yaml[0], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t0", "map")
 
         br_room_1 = tf.TransformBroadcaster()
-        br_room_1.sendTransform((1.0, 0.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl1", "map")
+        br_room_1.sendTransform(self.aruco_yaml[1], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t1", "map")
 
         br_room_2 = tf.TransformBroadcaster()
-        br_room_2.sendTransform((1.0, -2.0, 0.5), quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "sl2", "map")
+        br_room_2.sendTransform(self.aruco_yaml[2], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t2", "map")
+
+        br_room_3 = tf.TransformBroadcaster()
+        br_room_3.sendTransform(self.aruco_yaml[3], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t3", "map")
+
+        br_room_4 = tf.TransformBroadcaster()
+        br_room_4.sendTransform(self.aruco_yaml[4], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t4", "map")
+
+        br_room_5 = tf.TransformBroadcaster()
+        br_room_5.sendTransform(self.aruco_yaml[5], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t5", "map")
+
+        br_room_6 = tf.TransformBroadcaster()
+        br_room_6.sendTransform(self.aruco_yaml[6], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t6", "map")
+
+        br_room_7 = tf.TransformBroadcaster()
+        br_room_7.sendTransform(self.aruco_yaml[7], quaternion_from_euler(0.0, 0.0, 0.0), rospy.Time.now(), "t7", "map")
 
     def resetMarkers(self):
 
@@ -178,6 +215,7 @@ class EkfLocalization:
             th = msg.angle
             self.measurement = np.array([dist, th , index]).transpose()
             self.markerStatus = True
+            self.markerList[index] = True
         except:
             pass
 
