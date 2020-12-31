@@ -61,7 +61,7 @@ class makeMap:
 
         # define subscribers
         rospy.Subscriber(laser, LaserScan, self.scan_callback)
-        rospy.Subscriber(odom,Odometry, self.odom_callback)
+        rospy.Subscriber('explorer/pose_filtered', Pose, self.odom_callback)
         #rospy.Subscriber('state_estimate', Config, self.get_state_estimate)
 
         # define publishers
@@ -112,14 +112,14 @@ class makeMap:
     def odom_callback(self, msg):
         
         #this subscriber save the current orientation and position
-        orientation_q = msg.pose.pose.orientation # take the quaternions
+        orientation_q = msg.orientation # take the quaternions
         #convert to euler, we only care about the Z rotation, the yaw
         orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
         (self.roll, self.pitch, self.yaw) = tf.transformations.euler_from_quaternion (orientation_list)
         #we lets use just the yaw for robot mobilie
         
-        self.curX = msg.pose.pose.position.x
-        self.curY = msg.pose.pose.position.y
+        self.curX = msg.position.x
+        self.curY = msg.position.y
         self.odomInit = True
 
     def scan_callback(self, msg):
@@ -149,7 +149,7 @@ class makeMap:
     def initializeMap(self):
         # initialize int map grid array (100 = occupy, 0 = empty, -1 = unknown state)
 
-        for i in range(self.GRID_SIZEX*self.GRID_SIZEY):
+        for _ in range(self.GRID_SIZEX*self.GRID_SIZEY):
             self.current_map.data.append(-1.0)
             self.prior.append(0.0)
 

@@ -86,7 +86,7 @@ class EkfLocalization:
                 i = Z[2] # Feature
                 self.prediction(pos, control)
                 self.sigma = self.G.dot(self.sigma).dot(self.G.T) + self.R
-                print(pos)
+            
                 ZHAT = self.aruco_true(self.aruco_yaml[i], i, pos)
                 residual = np.subtract(Z, ZHAT)
                 S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
