@@ -14,7 +14,6 @@ from math import pi, sqrt, atan2, isnan, sin, cos, acos
 from explorer_turtle.msg import MarkerArray, Marker
 import matplotlib.pyplot as plt
 from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseWithCovarianceStamped
-from ass.utility import *
 import yaml
 from marker_rviz import MarkerRviz
 import tf
@@ -22,7 +21,6 @@ import tf
 # CONSTANT
 
 NUMBER_MARKERS = 8
-KEY_NUMBER = 1024
 Ts = 1/100 # control (u) by a translational and angular velocity, executed over a fixed time interval Ts
 
 sigma_range = 5.8e-15
@@ -43,6 +41,8 @@ class EkfLocalization:
             
             stream.close()
 
+        self.save_date = open("/home/alanpereira/catkin_ws/src/explorer_turtle/docs/measurement.csv", "a")
+
         # important variables
         self.control = np.array([0, 0], dtype='float64').transpose()
         self.last_odom = np.array([0, 0, 0], dtype='float64').transpose()
@@ -62,7 +62,7 @@ class EkfLocalization:
         rospy.Subscriber('/explorer/marker', Marker, self.marker_callback)
 
         # Init Publishers
-        self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=50)
+        self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=100)
 
         # list with rooms parameters 
 
@@ -86,8 +86,13 @@ class EkfLocalization:
                 i = Z[2] # Feature
                 self.prediction(pos, control)
                 self.sigma = self.G.dot(self.sigma).dot(self.G.T) + self.R
-            
                 ZHAT = self.aruco_true(self.aruco_yaml[i], i, pos)
+
+                # teste data
+                data_format = np.concatenate((ZHAT, Z))
+                data_format = data_format.reshape(1, 6)
+                np.savetxt(self.save_date, data_format, delimiter=",")
+
                 residual = np.subtract(Z, ZHAT)
                 S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
                 if np.linalg.det(S):
@@ -101,6 +106,8 @@ class EkfLocalization:
                 self.resetMarkers()
 
             self.rate.sleep()
+        self.save_date.close
+        print('file save')
 
     def markerVisualization(self):
 
@@ -211,11 +218,12 @@ class EkfLocalization:
 
         try:
             index = msg.id
-            dist = msg.distance
-            th = msg.angle
-            self.measurement = np.array([dist, th , index]).transpose()
-            self.markerStatus = True
-            self.markerList[index] = True
+            if(index >=0 and index < NUMBER_MARKERS): # aruco tag id from 0 to NUMBER_MARKERS
+                dist = msg.distance
+                th = msg.angle
+                self.measurement = np.array([dist, th , index]).transpose()
+                self.markerStatus = True
+                self.markerList[index] = True
         except:
             pass
 
@@ -227,12 +235,11 @@ class EkfLocalization:
 
         rx = robot[0]
         ry = robot[1]
-        rt = robot[0]
+        rt = robot[2]
 
         q = (lx - rx)**2 + (ly - ry)**2
         dist = sqrt(q)
         th = atan2((ly-ry),(lx-rx) ) - rt
-        th = normangle(th)
 
         self.H = np.array([[-(lx - rx)/dist, -(ly - ry)/dist , 0],[(ly - ry)/q, -(lx - rx)/q, -1],[0 , 0, 0]])
 

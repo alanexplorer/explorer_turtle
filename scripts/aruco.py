@@ -23,7 +23,7 @@ first roslaunch usb_cam usb_cam-test.launch. Subscribe to /usb_cam/image_raw, wh
 ARUCO_PARAMETERS = aruco.DetectorParameters_create()
 ARUCO_DICT = aruco.Dictionary_get(aruco.DICT_ARUCO_ORIGINAL)
 ARUCO_SQUARE_SIZE = 0.177800
-MX_MARKER = 1023 # max aruco id
+MX_MARKER = 1024
 
 # The grid board type we're looking for
 board = aruco.GridBoard_create(
@@ -106,16 +106,23 @@ class ArucoDetector():
                     aruco_detect = Marker()
                     id_number = ids[i, 0]
                     aruco_detect.id = id_number
-                    if id_number <= MX_MARKER:
+                    if id_number < MX_MARKER:
                         self.marker_list_status[i] = True
         
                     test_img = aruco.drawDetectedMarkers(test_img, corners, ids)
                     test_img = aruco.drawAxis(test_img, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS, rvecs[i], tvecs[i], ARUCO_SQUARE_SIZE)
                    
                     zDist = np.asscalar(tvecs[0][0][2])
-                    yaw = rvecs[0][0][2]
-                   
-                    cv2.putText(test_img, "%.1f cm -- %.0f deg" % ((zDist * 100), yaw / pi * 180), (0, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
+
+                    rotation_matrix, _ = cv2.Rodrigues(rvecs) # calculate your object pose rotation matrix
+
+                    camera_matrix = rotation_matrix.T # calculate your camera rotation matrix
+
+                    camera_vector, _ = cv2.Rodrigues(camera_matrix) # calculate your camera rvec
+                    
+                    yaw = camera_vector[2][0]
+                  
+                    cv2.putText(test_img, "%d tag - %.1f cm - %.0f deg" % (id_number, (zDist * 100), yaw / pi * 180), (0, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
                     aruco_detect.distance = zDist
                     aruco_detect.angle = yaw #radians, which is between PI and -PI
                     self.marker_pub.publish(aruco_detect)
