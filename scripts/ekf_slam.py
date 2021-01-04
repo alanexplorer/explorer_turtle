@@ -41,7 +41,7 @@ class EkfLocalization:
             
             stream.close()
 
-        self.save_date = open("/home/alanpereira/catkin_ws/src/explorer_turtle/docs/measurement.csv", "a")
+        # self.save_date = open("/home/alanpereira/catkin_ws/src/explorer_turtle/docs/measurement.csv", "a")
 
         # important variables
         self.control = np.array([0, 0], dtype='float64').transpose()
@@ -89,25 +89,41 @@ class EkfLocalization:
                 ZHAT = self.aruco_true(self.aruco_yaml[i], i, pos)
 
                 # teste data
-                data_format = np.concatenate((ZHAT, Z))
-                data_format = data_format.reshape(1, 6)
-                np.savetxt(self.save_date, data_format, delimiter=",")
+                # data_format = np.concatenate((ZHAT, Z))
+                # data_format = data_format.reshape(1, 6)
+                # np.savetxt(self.save_date, data_format, delimiter=",")
 
-                residual = np.subtract(Z, ZHAT)
-                S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
-                if np.linalg.det(S):
-                    K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
-                else:
-                    K = np.array([0, 0, 0], dtype='float64')
-                mu = pos + np.dot(K, residual)
-                self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
-                self.pub_position(mu, self.sigma)
-                self.markerVisualization()
-                self.resetMarkers()
+                if(self.threshold(Z, ZHAT)):
+
+                    residual = np.subtract(Z, ZHAT)
+                    S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
+                    if np.linalg.det(S):
+                        K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
+                    else:
+                        K = np.array([0, 0, 0], dtype='float64')
+                    mu = pos + np.dot(K, residual)
+                    self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
+                    self.pub_position(mu, self.sigma)
+                    self.markerVisualization()
+                    self.resetMarkers()
 
             self.rate.sleep()
-        self.save_date.close
-        print('file save')
+        # self.save_date.close
+
+    def threshold(self, Z, ZHAT):
+
+        diff_distance = np.subtract(Z[0], ZHAT[0])
+        diff_distance = abs(diff_distance)
+
+        diff_theta = np.subtract(Z[1], ZHAT[1])
+        diff_theta = abs(diff_theta)
+
+        # difference less than 20 centimeters and 10 degrees
+
+        if(diff_distance < 0.2 and diff_theta < 10*pi/180):
+            return True
+        
+        return False
 
     def markerVisualization(self):
 
@@ -237,7 +253,7 @@ class EkfLocalization:
         ry = robot[1]
         rt = robot[2]
 
-        q = (lx - rx)**2 + (ly - ry)**2
+        q = (lx - rx)**2 + (ly - ry)**2 + 0.01
         dist = sqrt(q)
         th = atan2((ly-ry),(lx-rx) ) - rt
 

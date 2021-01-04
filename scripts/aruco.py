@@ -112,17 +112,16 @@ class ArucoDetector():
                     test_img = aruco.drawDetectedMarkers(test_img, corners, ids)
                     test_img = aruco.drawAxis(test_img, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS, rvecs[i], tvecs[i], ARUCO_SQUARE_SIZE)
                    
-                    zDist = np.asscalar(tvecs[0][0][2])
+                    #zDist = np.asscalar(tvecs[0][0][2])
+                    #camera_matrix, _ = cv2.Rodrigues(rvecs[0]) # calculate your object pose rotation matrix
+                    #camera_matrix = np.matrix(camera_matrix).T # get the transpose
+                    #camera_rotate, _ = cv2.Rodrigues(camera_matrix) # calculate your camera rvec
+                    #yaw = camera_rotate[2][0]
 
-                    rotation_matrix, _ = cv2.Rodrigues(rvecs) # calculate your object pose rotation matrix
+                    yaw = -1 * atan2(tvecs[0][0][0], tvecs[0][0][2])
+                    zDist = sqrt(tvecs[0][0][0] ** 2 + tvecs[0][0][1] ** 2 + tvecs[0][0][2] ** 2)
 
-                    camera_matrix = rotation_matrix.T # calculate your camera rotation matrix
-
-                    camera_vector, _ = cv2.Rodrigues(camera_matrix) # calculate your camera rvec
-                    
-                    yaw = camera_vector[2][0]
-                  
-                    cv2.putText(test_img, "%d tag - %.1f cm - %.0f deg" % (id_number, (zDist * 100), yaw / pi * 180), (0, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
+                    cv2.putText(test_img, "%d tag - %.2f cm - %.2f deg" % (id_number, (zDist * 100), yaw / pi * 180), (0, 230), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
                     aruco_detect.distance = zDist
                     aruco_detect.angle = yaw #radians, which is between PI and -PI
                     self.marker_pub.publish(aruco_detect)

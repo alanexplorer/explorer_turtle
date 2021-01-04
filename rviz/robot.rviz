@@ -281,7 +281,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t1
       Name: Marker
       Namespaces:
-        {}
+        totem_t1: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -289,7 +289,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t2
       Name: Marker
       Namespaces:
-        {}
+        totem_t2: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -297,7 +297,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t3
       Name: Marker
       Namespaces:
-        {}
+        totem_t3: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -305,7 +305,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t4
       Name: Marker
       Namespaces:
-        {}
+        totem_t4: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -313,7 +313,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t5
       Name: Marker
       Namespaces:
-        {}
+        totem_t5: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -321,7 +321,7 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t6
       Name: Marker
       Namespaces:
-        {}
+        totem_t6: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -329,14 +329,14 @@ Visualization Manager:
       Marker Topic: /explorer/totens_t7
       Name: Marker
       Namespaces:
-        {}
+        totem_t7: true
       Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: odom
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
