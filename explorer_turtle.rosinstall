@@ -1,0 +1,11 @@
+# turblebot_navigation install
+- git: {local-name: turtlebot_apps, uri: 'https://github.com/turtlebot/turtlebot_apps.git', version: indigo}
+
+# gazebo_ros install
+- git: {local-name: gazebo_ros_pkgs, uri: 'https://github.com/ros-simulation/gazebo_ros_pkgs.git', version: kinetic-devel}
+
+# nav2d install
+- git: {local-name: navigation_2d, uri: 'https://github.com/skasperski/navigation_2d.git', version: kinetic}
+
+# msgs install
+- git: {local-name: turtlebot_msgs, uri: 'https://github.com/turtlebot/turtlebot_msgs.git', version: indigo}

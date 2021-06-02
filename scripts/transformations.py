@@ -9,11 +9,6 @@ def point2grid(x0, y0, x1, y1, width, height, resolution):
     gridX = int(round((x0-x1)/resolution))
     gridY = int(round((y0-y1)/resolution))
 
-    #gridX = int((x1 - x0)/resolution)
-    #gridY = int((y1 - y0)/resolution)
-    
-    #check if the coordinate given is at the end of the grid map, in that case
-	#round to the 'previous cell'
     if x1 == (width + x0):
         gridX -=1
     if y1 == (height + y0):
