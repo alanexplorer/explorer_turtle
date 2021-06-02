@@ -1,16 +1,10 @@
 #!/usr/bin/env python
 
-__author__ = "Alan Pereira da Silva"
-__copyright__ = "Copyright (C), Daedalus Roboti"
-__license__ = "GPL"
-__version__ = "1.0"
-__email__ = "aps@ic.ufal.br"
-
 import rospy
 import tf
 from math import sin, cos, pi,tan, atan2, log
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3
+from geometry_msgs.msg import Point, Pose, Quaternion, Twist, Vector3, PoseWithCovarianceStamped
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import MapMetaData
@@ -33,27 +27,23 @@ class makeMap:
         self.range_size = 0
         self.curRanges = []
         self.prevRanges = []
-        self.LASER_MIN_RANG = 0.5
-        self.LASER_MAX_RANG = 10
+        self.LASER_MAX_RANG = 16 # size max for diag sqare
         self.SCAN_DIFF_THRESHOLD = 0.05
 
         # parameter for mapping
-        self.GRID_SIZEX = 500
-        self.GRID_SIZEY = 500
-        self.GRID_RESOLUTION = 0.05 #in meters/cell(5cm)
+        self.GRID_SIZEX = 200
+        self.GRID_SIZEY = 200
+        self.GRID_RESOLUTION = 0.05 #in metres per occupancy grid block (5cm)
         self.origin_x = -self.GRID_SIZEX/2*self.GRID_RESOLUTION
         self.origin_y = -self.GRID_SIZEY/2*self.GRID_RESOLUTION
 
         #parameter probabilistic
 
-        self.SENSOR_MODEL_TRUE_POSITIVE = 0.9
-        self.SENSOR_MODEL_FALSE_POSITIVE = 0.3
-        self.OCCUPIED_PROB = 0.5
-        self.prior = [] #array with probability prior
-        self.p_free=log(0.3/0.7)
-        self.p_occ=log(0.9/0.1)
+        self.prior=[] #array with probability prior
+        self.p_free=log(0.3/0.7) #sensor model false positive 30%
+        self.p_occ=log(0.7/0.3) #sensor model true positive 70%
         self.max_logodd=100.0
-        self.max_logodd_belief=10.0
+        self.max_logodd_belief=30.0
 
         # define ros param
         laser = rospy.get_param("/laser_topic")
@@ -61,7 +51,8 @@ class makeMap:
 
         # define subscribers
         rospy.Subscriber(laser, LaserScan, self.scan_callback)
-        rospy.Subscriber('explorer/pose_filtered', Pose, self.odom_callback)
+        #rospy.Subscriber(odom, Odometry, self.odom_callback)
+        rospy.Subscriber(odom, Pose, self.odom_callback)
         #rospy.Subscriber('state_estimate', Config, self.get_state_estimate)
 
         # define publishers
@@ -74,14 +65,12 @@ class makeMap:
 
         #define transform
         self.listener = tf.TransformListener()
-        self.roll = 0.0
-        self.pitch = 0.0
         self.yaw = 0.0
         self.curX = 0
         self.curY = 0
         self.br = tf.TransformBroadcaster()
 
-        rospy.loginfo("publishing updated map.")
+        rospy.loginfo("publishing updated map...")
 
     def run(self):
         while not rospy.is_shutdown():
@@ -90,10 +79,9 @@ class makeMap:
             self.rate.sleep()
 
     def updateMap(self):
-
         for i in range(self.range_size):
             if not math.isnan(self.curRanges[i]):
-                if not math.isnan(self.prevRanges[i]) and abs(self.curRanges[i] - self.prevRanges[i]) > self.SCAN_DIFF_THRESHOLD:
+                if not math.isnan(self.prevRanges[i]) and abs(self.curRanges[i] - self.prevRanges[i]) < self.SCAN_DIFF_THRESHOLD:
                     r = self.curRanges[i]
                     x = r * cos(self.angle_min + i*self.angle_increment)
                     y = r * sin(self.angle_min + i*self.angle_increment)
@@ -115,7 +103,7 @@ class makeMap:
         orientation_q = msg.orientation # take the quaternions
         #convert to euler, we only care about the Z rotation, the yaw
         orientation_list = [orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w]
-        (self.roll, self.pitch, self.yaw) = tf.transformations.euler_from_quaternion (orientation_list)
+        (_, _, self.yaw) = tf.transformations.euler_from_quaternion (orientation_list)
         #we lets use just the yaw for robot mobilie
         
         self.curX = msg.position.x

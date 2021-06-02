@@ -1,4 +1,5 @@
-odometry_topic: odom
+odometry_topic: explorer/pose_filtered
+#odometry_topic: ground_truth/state
 laser_topic: scan
 camera_image: camera/rgb/image_raw
 camera_info: camera/rgb/camera_info

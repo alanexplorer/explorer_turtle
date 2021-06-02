@@ -1,11 +1,5 @@
 #!/usr/bin/env python
 
-__author__ = "Alan Pereira da Silva"
-__copyright__ = "Copyright (C), Daedalus Roboti"
-__license__ = "GPL"
-__version__ = "1.0"
-__email__ = "aps@ic.ufal.br"
-
 import rospy
 from nav_msgs.msg import Odometry
 import numpy as np
@@ -23,9 +17,10 @@ import tf
 NUMBER_MARKERS = 8
 Ts = 1/100 # control (u) by a translational and angular velocity, executed over a fixed time interval Ts
 
-sigma_range = 5.8e-15
-sigma_bearing = 0.5
-sigma_id = 1e16
+# Estimation error
+sigma_range = 0.1
+sigma_bearing = 0.1
+sigma_id = 0.0
 
 class EkfLocalization:
 
@@ -58,8 +53,8 @@ class EkfLocalization:
 
         # Init Subscriber
         rospy.Subscriber('odom', Odometry, self.odom_callback)
-        #rospy.Subscriber('/explorer/markers', MarkerArray, self.marker_callback)
         rospy.Subscriber('/explorer/marker', Marker, self.marker_callback)
+        #rospy.Subscriber('/explorer/markers', MarkerArray, self.marker_callback)
 
         # Init Publishers
         self.estimate_pub = rospy.Publisher('explorer/pose_filtered', Pose, queue_size=100)
@@ -88,42 +83,20 @@ class EkfLocalization:
                 self.sigma = self.G.dot(self.sigma).dot(self.G.T) + self.R
                 ZHAT = self.aruco_true(self.aruco_yaml[i], i, pos)
 
-                # teste data
-                # data_format = np.concatenate((ZHAT, Z))
-                # data_format = data_format.reshape(1, 6)
-                # np.savetxt(self.save_date, data_format, delimiter=",")
+                residual = np.subtract(Z, ZHAT)
 
-                if(self.threshold(Z, ZHAT)):
-
-                    residual = np.subtract(Z, ZHAT)
-                    S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
-                    if np.linalg.det(S):
-                        K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
-                    else:
-                        K = np.array([0, 0, 0], dtype='float64')
-                    mu = pos + np.dot(K, residual)
-                    self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
-                    self.pub_position(mu, self.sigma)
-                    self.markerVisualization()
-                    self.resetMarkers()
+                S = self.H.dot(self.sigma).dot(self.H.T) + self.Q
+                if np.linalg.det(S):
+                    K = self.sigma.dot(self.H.T).dot(np.linalg.inv(S))
+                else:
+                    K = np.array([0, 0, 0], dtype='float64')
+                mu = pos + np.dot(K, residual)
+                self.sigma = (np.identity(3) - np.cross(K, self.H))*self.sigma
+                self.pub_position(mu, self.sigma)
+                self.markerVisualization()
+                self.resetMarkers()
 
             self.rate.sleep()
-        # self.save_date.close
-
-    def threshold(self, Z, ZHAT):
-
-        diff_distance = np.subtract(Z[0], ZHAT[0])
-        diff_distance = abs(diff_distance)
-
-        diff_theta = np.subtract(Z[1], ZHAT[1])
-        diff_theta = abs(diff_theta)
-
-        # difference less than 20 centimeters and 10 degrees
-
-        if(diff_distance < 0.2 and diff_theta < 10*pi/180):
-            return True
-        
-        return False
 
     def markerVisualization(self):
 
@@ -192,9 +165,6 @@ class EkfLocalization:
         th = pos[2]
         v = control[0]
         w = control[1]
-
-        #G_02 = -(v/w)*cos(th) + (v/w)*cos(th + w*Ts)
-        #G_12 = -(v/w)*sin(th) + (v/w)*sin(th + w*Ts)
 
         G_02 = -v*Ts*sin(th + (w*Ts)/2)
         G_12 = v*Ts*cos(th + (w*Ts)/2)

@@ -40,7 +40,7 @@ class ArucoDetector():
 
     def __init__(self):
 
-        rospy.loginfo("publisher aruco")
+        rospy.loginfo("publisher aruco ...")
 
         # define ros param
         cam_img = rospy.get_param("/camera_image")
@@ -111,12 +111,6 @@ class ArucoDetector():
         
                     test_img = aruco.drawDetectedMarkers(test_img, corners, ids)
                     test_img = aruco.drawAxis(test_img, self.CAMERA_MATRIX, self.DISTORTION_COEFFICIENTS, rvecs[i], tvecs[i], ARUCO_SQUARE_SIZE)
-                   
-                    #zDist = np.asscalar(tvecs[0][0][2])
-                    #camera_matrix, _ = cv2.Rodrigues(rvecs[0]) # calculate your object pose rotation matrix
-                    #camera_matrix = np.matrix(camera_matrix).T # get the transpose
-                    #camera_rotate, _ = cv2.Rodrigues(camera_matrix) # calculate your camera rvec
-                    #yaw = camera_rotate[2][0]
 
                     yaw = -1 * atan2(tvecs[0][0][0], tvecs[0][0][2])
                     zDist = sqrt(tvecs[0][0][0] ** 2 + tvecs[0][0][1] ** 2 + tvecs[0][0][2] ** 2)
